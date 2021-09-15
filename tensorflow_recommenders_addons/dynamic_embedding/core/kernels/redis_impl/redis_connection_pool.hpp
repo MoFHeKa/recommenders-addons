@@ -90,23 +90,7 @@ class RedisWrapper<
     sentinel_opts.socket_timeout = std::chrono::milliseconds(
         redis_connection_params.redis_sentinel_socket_timeout);
 
-    // Redis connection options
-    conn_opts.user = redis_connection_params.redis_user;
-    conn_opts.password =
-        redis_connection_params
-            .redis_password;  // Optional. No redis_password by default.
-    conn_opts.db = redis_connection_params.redis_db;
-    conn_opts.keep_alive = redis_connection_params.redis_connect_keep_alive;
-    conn_opts.connect_timeout = std::chrono::milliseconds(
-        redis_connection_params.redis_connect_timeout);
-    conn_opts.socket_timeout =
-        std::chrono::milliseconds(redis_connection_params.redis_socket_timeout);
-    // Redis connection pool options
-    pool_opts.size = redis_connection_params.redis_conn_pool_size;
-    pool_opts.wait_timeout =
-        std::chrono::milliseconds(redis_connection_params.redis_wait_timeout);
-    pool_opts.connection_lifetime =
-        std::chrono::minutes(redis_connection_params.redis_connection_lifetime);
+    SetPublicConnParams(conn_opts, pool_opts, redis_connection_params);
 
     auto sentinel = std::make_shared<Sentinel>(sentinel_opts);
 
@@ -115,17 +99,12 @@ class RedisWrapper<
           RedisInstance(sentinel, redis_connection_params.redis_master_name,
                         Role::MASTER, conn_opts, pool_opts));
       redis_client->ping();
-      auto info_cluster = redis_client->command("info", "cluster");
-      auto tmp_char = strtok(info_cluster->str, "\n");
-      tmp_char = strtok(NULL, "\n");
-      tmp_char = strtok(tmp_char, ":");
-      auto cluster_bool = strtok(NULL, ":");
-      if (strcmp(cluster_bool, "0\r") != 0) {
+      if (RedisClusterEnabled(redis_client) == true) {
         LOG(ERROR)
-            << "Now is single mode but try to connect Redis cluster nodes. "
+            << "Now is sentinel mode but try to connect Redis cluster nodes. "
                "Please check redis_connection_mode in config file.";
         throw std::invalid_argument(
-            "Can not connect to cluster nodes when in single mode, "
+            "Can not connect to cluster nodes when in sentinel mode, "
             "redis_connection_mode should be 0 when connect to cluster nodes.");
       }
       return redis_client;
@@ -146,33 +125,14 @@ class RedisWrapper<
     // Redis connection options
     conn_opts.host = redis_connection_params.redis_host_ip[0];
     conn_opts.port = redis_connection_params.redis_host_port[0];
-    conn_opts.user = redis_connection_params.redis_user;
-    conn_opts.password =
-        redis_connection_params
-            .redis_password;  // Optional. No redis_password by default.
-    conn_opts.db = redis_connection_params.redis_db;
-    conn_opts.keep_alive = redis_connection_params.redis_connect_keep_alive;
-    conn_opts.connect_timeout = std::chrono::milliseconds(
-        redis_connection_params.redis_connect_timeout);
-    conn_opts.socket_timeout =
-        std::chrono::milliseconds(redis_connection_params.redis_socket_timeout);
-    // Redis connection pool options
-    pool_opts.size = redis_connection_params.redis_conn_pool_size;
-    pool_opts.wait_timeout =
-        std::chrono::milliseconds(redis_connection_params.redis_wait_timeout);
-    pool_opts.connection_lifetime =
-        std::chrono::minutes(redis_connection_params.redis_connection_lifetime);
+
+    SetPublicConnParams(conn_opts, pool_opts, redis_connection_params);
 
     try {
       static auto redis_client =
           std::make_shared<RedisInstance>(RedisInstance(conn_opts, pool_opts));
       redis_client->ping();
-      auto info_cluster = redis_client->command("info", "cluster");
-      auto tmp_char = strtok(info_cluster->str, "\n");
-      tmp_char = strtok(NULL, "\n");
-      tmp_char = strtok(tmp_char, ":");
-      auto cluster_bool = strtok(NULL, ":");
-      if (strcmp(cluster_bool, "0\r") != 0) {
+      if (RedisClusterEnabled(redis_client) == true) {
         LOG(ERROR)
             << "Now is single mode but try to connect Redis cluster nodes. "
                "Please check redis_connection_mode in config file.";

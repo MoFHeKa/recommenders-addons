@@ -73,35 +73,15 @@ class RedisWrapper<RedisInstance, K, V,
   std::shared_ptr<RedisInstance> StartConn(size_t ip_port_count) {
     conn_opts.host = redis_connection_params.redis_host_ip[ip_port_count];
     conn_opts.port = redis_connection_params.redis_host_port[ip_port_count];
-    // Redis connection options
-    conn_opts.user = redis_connection_params.redis_user;
-    conn_opts.password =
-        redis_connection_params
-            .redis_password;  // Optional. No redis_password by default.
-    conn_opts.db = redis_connection_params.redis_db;
-    conn_opts.keep_alive = redis_connection_params.redis_connect_keep_alive;
-    conn_opts.connect_timeout = std::chrono::milliseconds(
-        redis_connection_params.redis_connect_timeout);
-    conn_opts.socket_timeout =
-        std::chrono::milliseconds(redis_connection_params.redis_socket_timeout);
-    // Redis connection pool options
-    pool_opts.size = redis_connection_params.redis_conn_pool_size;
-    pool_opts.wait_timeout =
-        std::chrono::milliseconds(redis_connection_params.redis_wait_timeout);
-    pool_opts.connection_lifetime =
-        std::chrono::minutes(redis_connection_params.redis_connection_lifetime);
+
+    SetPublicConnParams(conn_opts, pool_opts, redis_connection_params);
 
     try {
       static auto redis_client =
           std::make_shared<RedisInstance>(RedisInstance(conn_opts, pool_opts));
       redis_client->set("key test for connecting", "val test for connecting",
                         std::chrono::milliseconds(1));
-      auto info_cluster = redis_client->command("info", "cluster");
-      auto tmp_char = strtok(info_cluster->str, "\n");
-      tmp_char = strtok(NULL, "\n");
-      tmp_char = strtok(tmp_char, ":");
-      auto cluster_bool = strtok(NULL, ":");
-      if (strcmp(cluster_bool, "1\r") != 0) {
+      if (RedisClusterEnabled(redis_client) == false) {
         LOG(ERROR)
             << "Now is cluster mode but try to connect Redis single node. "
                "Please check redis_connection_mode in config file.";

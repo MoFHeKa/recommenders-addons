@@ -309,6 +309,43 @@ class RedisVirtualWrapper {
   bool isRedisConnect = false;
   Redis_Connection_Params redis_connection_params;
 
+ protected:
+  template <typename RedisClient>
+  inline bool RedisClusterEnabled(RedisClient redis_client) {
+    auto info_cluster = redis_client->command("info", "cluster");
+    auto tmp_char = strtok(info_cluster->str, "\n");
+    tmp_char = strtok(NULL, "\n");
+    tmp_char = strtok(tmp_char, ":");
+    auto cluster_bool = strtok(NULL, ":");
+    if (strcmp(cluster_bool, "1\r") == 0) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  template <typename ConnOpts, typename PoolOpts, typename ConnParams>
+  inline void SetPublicConnParams(ConnOpts &conn_opts, PoolOpts &pool_opts,
+                                  ConnParams &redis_connection_params) {
+    // Redis connection options
+    conn_opts.user = redis_connection_params.redis_user;
+    conn_opts.password =
+        redis_connection_params
+            .redis_password;  // Optional. No redis_password by default.
+    conn_opts.db = redis_connection_params.redis_db;
+    conn_opts.keep_alive = redis_connection_params.redis_connect_keep_alive;
+    conn_opts.connect_timeout = std::chrono::milliseconds(
+        redis_connection_params.redis_connect_timeout);
+    conn_opts.socket_timeout =
+        std::chrono::milliseconds(redis_connection_params.redis_socket_timeout);
+    // Redis connection pool options
+    pool_opts.size = redis_connection_params.redis_conn_pool_size;
+    pool_opts.wait_timeout =
+        std::chrono::milliseconds(redis_connection_params.redis_wait_timeout);
+    pool_opts.connection_lifetime =
+        std::chrono::minutes(redis_connection_params.redis_connection_lifetime);
+  }
+
  public:
   void set_params(struct Redis_Connection_Params &conn_params_input) {
     this->redis_connection_params = conn_params_input;
